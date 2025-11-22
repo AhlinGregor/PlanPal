@@ -2,6 +2,9 @@
 
 # dependencies
 node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Expo
 .expo/
@@ -32,6 +35,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -41,3 +45,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Supabase
+.supabase/
+supabase/.temp/
+supabase/functions/.temp/
