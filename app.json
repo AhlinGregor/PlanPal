@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PlanPal",
-    "slug": "PlanPal",
+    "slug": "planpal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -43,6 +43,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "eeab3206-e71c-4d49-a27b-4122bbf33bd2"
+      }
+    },
+    "owner": "istradevs"
   }
 }
