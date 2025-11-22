@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import {
-  Text,
-  View,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   Modal,
-  TextInput
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { Link } from 'expo-router';
 import SubjectProgress from '../components/SubjectProgress';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Index() {
+  const { signOut, user } = useAuth();
   const [subjects, setSubjects] = useState([
     { subject: "Math", percent: 70 },
     { subject: "Science", percent: 40 },
@@ -30,7 +31,12 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Current progress</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Current progress</Text>
+        <TouchableOpacity onPress={signOut} style={styles.signOutButton}>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView contentContainerStyle={styles.list}>
         {subjects.map((item, index) => (
@@ -91,11 +97,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#25292e',
     alignItems: 'center',
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 20,
+  },
   title: {
     color: '#fff',
     fontSize: 22,
-    marginTop: 15,
-    marginBottom: 20,
+  },
+  signOutButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 8,
+  },
+  signOutText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   list: {
     alignItems: 'center',
