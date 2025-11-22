@@ -33,14 +33,24 @@ export default function Index() {
       <Text style={styles.title}>Current progress</Text>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {subjects.map((item, index) => (
-          <SubjectProgress
-            key={index}
-            subject={item.subject}
-            percent={item.percent}
-          />
-        ))}
-      </ScrollView>
+  {subjects.map((item, index) => (
+    <SubjectProgress
+      key={index}
+      subject={item.subject}
+      percent={item.percent}
+      onPressCheck={() => {
+        setSubjects(prev =>
+          prev.map((s, i) =>
+            i === index
+              ? { ...s, percent: Math.min(s.percent + 10, 100) }
+              : s
+          )
+        );
+      }}
+    />
+  ))}
+</ScrollView>
+
 
       <TouchableOpacity
         style={styles.addButton}
@@ -89,15 +99,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#25292e',
-    alignItems: 'center',
+    
   },
   title: {
     color: '#fff',
     fontSize: 22,
     marginTop: 15,
     marginBottom: 20,
+    alignSelf: 'center',
   },
   list: {
+    width: '100%',
     alignItems: 'center',
     paddingBottom: 80,
   },
