@@ -19,6 +19,15 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
+        name="pal"
+        options={{
+          title: 'Pal',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} color={color} size={24}/>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
@@ -28,11 +37,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="about"
+        name="calendar"
         options={{
-          title: 'About',
+          title: 'Calendar',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'information-circle' : 'information-circle-outline'} color={color} size={24}/>
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} color={color} size={24}/>
           ),
         }}
       />
