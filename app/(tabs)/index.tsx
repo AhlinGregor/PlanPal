@@ -83,7 +83,7 @@ export default function Index() {
         <Text style={styles.addText}>+</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={{
           marginTop: 20,
           padding: 10,
@@ -97,7 +97,7 @@ export default function Index() {
         }}
         >
         <Text style={{ color: '#fff' }}>Log out</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
 
       {/* Add Subject Modal */}
