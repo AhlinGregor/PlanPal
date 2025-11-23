@@ -315,3 +315,122 @@ export async function clearAllEvents(): Promise<boolean> {
     return false;
   }
 }
+
+// Task types and functions
+export interface Task {
+  id: string;
+  title: string;
+  date: string; // ISO date string: "2025-11-18"
+  completed: boolean;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
+  user_id?: string;
+}
+
+export async function createTask(task: Omit<Task, 'id' | 'created_at' | 'updated_at' | 'user_id'>): Promise<Task | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('No user logged in');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([
+        {
+          title: task.title,
+          date: task.date,
+          completed: task.completed,
+          color: task.color,
+          user_id: user.id,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating task:', error);
+    return null;
+  }
+}
+
+export async function getTasks(): Promise<Task[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('No user logged in');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    return [];
+  }
+}
+
+export async function updateTask(
+  taskId: string,
+  updates: Partial<Omit<Task, 'id' | 'created_at' | 'user_id'>>
+): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('No user logged in');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', taskId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return false;
+  }
+}
+
+export async function deleteTask(taskId: string): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('No user logged in');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    return false;
+  }
+}
