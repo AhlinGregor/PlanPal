@@ -2,6 +2,17 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Online demo
+
+To open this use Expo Go mobile app.
+
+[exp://7yxkubg-galileo02-8081.exp.direct](exp://7yxkubg-galileo02-8081.exp.direct)
+
+
+Test login credentials:
+- Username: matej.kodermac@protonmail.com
+- Password: Matej123
+
 ## Get started
 
 1. Install dependencies
