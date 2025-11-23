@@ -14,8 +14,16 @@ interface Task {
 	color: string;
 }
 
+interface DayTask {
+	id: string;
+	title: string;
+	date: string; // ISO date string: "2025-11-18"
+	completed: boolean;
+}
+
 interface CalendarComponentProps {
 	events?: Task[];
+	tasks?: DayTask[];
 	onAddButtonPress?: () => void;
 	onEditEvent?: (task: Task) => void;
 }
@@ -76,7 +84,7 @@ function getMonday(date: Date) {
 	return new Date(d.setDate(diff));
 }
 
-function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarComponentProps) {
+function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onEditEvent }: CalendarComponentProps) {
 	const [currentWeekStart, setCurrentWeekStart] = useState(getMonday(new Date()));
 	const [tasks, setTasks] = useState<Task[]>(events || getDefaultEventsForWeek(getMonday(new Date())));
 
@@ -86,6 +94,12 @@ function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarCo
 			setTasks(events);
 		}
 	}, [events]);
+
+	// Function to count tasks for a specific date
+	const getTaskCountForDate = (date: Date): number => {
+		const dateString = date.toISOString().split('T')[0];
+		return dayTasks.filter(task => task.date === dateString && !task.completed).length;
+	};
 
 	// Calculate dynamic hour range based on events
 	const getHourRange = () => {
@@ -209,28 +223,49 @@ function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarCo
 			{/* Day headers */}
 			<View style={styles.dayHeaderRow}>
 				<View style={styles.timeColumnHeader} />
-				{days.map((day, index) => (
-					<View
-						key={day}
-						style={[
-							styles.dayHeader,
-							isToday(weekDates[index]) && styles.todayHeader
-						]}
-					>
-						<Text style={[
-							styles.dayText,
-							isToday(weekDates[index]) && styles.todayText
-						]}>
-							{day}
-						</Text>
-						<Text style={[
-							styles.dateText,
-							isToday(weekDates[index]) && styles.todayDateText
-						]}>
-							{weekDates[index].getDate()}
-						</Text>
-					</View>
-				))}
+				{days.map((day, index) => {
+					return (
+						<View
+							key={day}
+							style={[
+								styles.dayHeader,
+								isToday(weekDates[index]) && styles.todayHeader
+							]}
+						>
+							<Text style={[
+								styles.dayText,
+								isToday(weekDates[index]) && styles.todayText
+							]}>
+								{day}
+							</Text>
+							<Text style={[
+								styles.dateText,
+								isToday(weekDates[index]) && styles.todayDateText
+							]}>
+								{weekDates[index].getDate()}
+							</Text>
+						</View>
+					);
+				})}
+			</View>
+
+			{/* Tasks row */}
+			<View style={styles.tasksRow}>
+				<View style={styles.tasksLabelColumn}>
+					<Text style={styles.tasksLabel}>Tasks</Text>
+				</View>
+				{days.map((day, index) => {
+					const taskCount = getTaskCountForDate(weekDates[index]);
+					return (
+						<View key={`task-${day}`} style={styles.taskCountCell}>
+							{taskCount > 0 && (
+								<View style={styles.taskCountBadge}>
+									<Text style={styles.taskCountText}>{taskCount}</Text>
+								</View>
+							)}
+						</View>
+					);
+				})}
 			</View>
 
 			{/* Calendar grid */}
@@ -376,6 +411,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		borderLeftWidth: 1,
 		borderLeftColor: '#333',
+		position: 'relative',
 	},
 	todayHeader: {
 		backgroundColor: '#ffd33d20',
@@ -396,6 +432,55 @@ const styles = StyleSheet.create({
 	},
 	todayDateText: {
 		color: '#ffd33d',
+	},
+	tasksRow: {
+		flexDirection: 'row',
+		backgroundColor: '#1a1d21',
+		borderBottomWidth: 1,
+		borderBottomColor: '#333',
+		paddingVertical: 8,
+	},
+	tasksLabelColumn: {
+		width: 60,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	tasksLabel: {
+		color: '#aaa',
+		fontSize: 12,
+		fontWeight: '600',
+	},
+	taskCountCell: {
+		width: COLUMN_WIDTH,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderLeftWidth: 1,
+		borderLeftColor: '#333',
+	},
+	taskSection: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 8,
+		gap: 6,
+	},
+	taskLabel: {
+		color: '#aaa',
+		fontSize: 11,
+		fontWeight: '600',
+	},
+	taskCountBadge: {
+		backgroundColor: '#ffd33d',
+		minWidth: 20,
+		height: 20,
+		borderRadius: 10,
+		justifyContent: 'center',
+		alignItems: 'center',
+		paddingHorizontal: 6,
+	},
+	taskCountText: {
+		color: '#25292e',
+		fontSize: 11,
+		fontWeight: 'bold',
 	},
 	scrollView: {
 		flex: 1,

@@ -1,23 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { CalendarComponent, Task } from '../components/CalendarComponent';
 import { CreateEventComponent } from '../components/CreateEventComponent';
 import { EditEventComponent } from '../components/EditEventComponent';
 import { usePersistedEvents } from '../hooks/usePersistedEvents';
 import { EVENTS, eventEmitter } from '../services/eventEmitter';
+import { Task as TaskType, getTasks } from '../components/supabase';
 
 export default function Calendar() {
 	const { events, isLoading, addEvent, updateEvent, deleteEvent, refetchEvents } = usePersistedEvents();
 	const [showCreateModal, setShowCreateModal] = useState(false);
 	const [showEditModal, setShowEditModal] = useState(false);
 	const [selectedEvent, setSelectedEvent] = useState<Task | null>(null);
+	const [tasks, setTasks] = useState<TaskType[]>([]);
+	const [totalTaskCount, setTotalTaskCount] = useState(0);
+
+	// Load tasks
+	const loadTasks = async () => {
+		const fetchedTasks = await getTasks();
+		setTasks(fetchedTasks);
+		// Calculate total incomplete tasks
+		const incompleteCount = fetchedTasks.filter(t => !t.completed).length;
+		setTotalTaskCount(incompleteCount);
+	};
+
+	useEffect(() => {
+		loadTasks();
+	}, []);
 
 	// Listen for calendar updates from other components (e.g., AI chat)
 	useEffect(() => {
 		const handleCalendarUpdate = () => {
 			console.log('[Calendar] Calendar updated event received, refetching...');
 			refetchEvents();
+			loadTasks();
 		};
 
 		eventEmitter.on(EVENTS.CALENDAR_UPDATED, handleCalendarUpdate);
@@ -32,6 +49,7 @@ export default function Calendar() {
 	useFocusEffect(
 		React.useCallback(() => {
 			refetchEvents();
+			loadTasks();
 		}, [])
 	);
 
@@ -68,7 +86,8 @@ export default function Calendar() {
 	return (
 		<View style={{ flex: 1 }}>
 			<CalendarComponent 
-				events={events} 
+				events={events}
+				tasks={tasks}
 				onAddButtonPress={() => setShowCreateModal(true)}
 				onEditEvent={handleEditEvent}
 			/>
@@ -89,4 +108,4 @@ export default function Calendar() {
 			/>
 		</View>
 	);
-}
+};
