@@ -2,22 +2,29 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-
 type SubjectProgressProps = {
   subject: string;
-  percent: number;      // 0–100
-  onPressCheck: () => void;
+  completedHours: number;
+  totalHours: number;
+  onPressCheck: () => void;       // increment 1 hour
+  onLongPressCheck?: () => void;  // decrement 1 hour (optional)
 };
 
-export default function SubjectProgress({ subject, percent, onPressCheck }: SubjectProgressProps) {
+export default function SubjectProgress({
+  subject,
+  completedHours,
+  totalHours,
+  onPressCheck,
+  onLongPressCheck,
+}: SubjectProgressProps) {
+  const percent = (completedHours / totalHours) * 100;
   const animatedWidth = useRef(new Animated.Value(0)).current;
 
-  // Animate whenever 'percent' changes
   useEffect(() => {
     Animated.timing(animatedWidth, {
       toValue: percent,
-      duration: 500,       // animation duration in ms
-      useNativeDriver: false, // width cannot use native driver
+      duration: 500,
+      useNativeDriver: false,
     }).start();
   }, [percent]);
 
@@ -30,14 +37,18 @@ export default function SubjectProgress({ subject, percent, onPressCheck }: Subj
 
   return (
     <View style={styles.wrapper}>
-      {/* Animated background fill */}
       <Animated.View style={[styles.fillBar, fillStyle]} />
 
-      {/* Content row */}
       <View style={styles.row}>
-        <Text style={styles.subjectText}>{subject}</Text>
+        <Text style={styles.subjectText}>
+          {subject} ({completedHours}/{totalHours}h)
+        </Text>
 
-        <TouchableOpacity style={styles.checkButton} onPress={onPressCheck}>
+        <TouchableOpacity
+          style={styles.checkButton}
+          onPress={onPressCheck}
+          onLongPress={onLongPressCheck}
+        >
           <Ionicons name="checkmark" size={22} color="#25292e" />
         </TouchableOpacity>
       </View>
