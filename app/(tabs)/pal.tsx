@@ -1,16 +1,43 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import ChatComponent from '../components/ChatComponent';
 import { Chat, ChatMessage, createChat, getChatHistory, updateChatTitle } from '../components/supabase';
+import { EVENTS, eventEmitter } from '../services/eventEmitter';
 
 export default function Pal() {
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     loadChatHistory();
   }, []);
+
+  // Listen for calendar updates to refresh calendar context in chat
+  useEffect(() => {
+    const handleCalendarUpdate = () => {
+      console.log('[Pal] Calendar updated, refreshing chat context...');
+      setRefreshKey(prev => prev + 1);
+    };
+
+    eventEmitter.on(EVENTS.CALENDAR_UPDATED, handleCalendarUpdate);
+
+    return () => {
+      eventEmitter.off(EVENTS.CALENDAR_UPDATED, handleCalendarUpdate);
+    };
+  }, []);
+
+  // Refresh calendar context when returning to this screen
+  useFocusEffect(
+    React.useCallback(() => {
+      if (selectedChat) {
+        // Trigger refresh of calendar context in ChatComponent
+        setRefreshKey(prev => prev + 1);
+      }
+    }, [selectedChat])
+  );
 
   const loadChatHistory = async () => {
     setLoading(true);
@@ -64,6 +91,7 @@ export default function Pal() {
           <Text style={styles.headerTitle}>{selectedChat.title}</Text>
         </View>
         <ChatComponent 
+          key={refreshKey}
           chatId={selectedChat.id} 
           initialMessages={selectedChat.messages}
           onMessagesUpdate={handleMessagesUpdate}

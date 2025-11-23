@@ -38,6 +38,36 @@ function getDefaultEventsForWeek(weekStart: Date): Task[] {
 	];
 }
 
+// Helper to detect overlapping events
+function getOverlappingGroups(tasks: Task[], date: string): Task[][] {
+	const dayTasks = tasks.filter(t => t.date === date).sort((a, b) => a.startHour - b.startHour);
+	const groups: Task[][] = [];
+	
+	for (const task of dayTasks) {
+		let addedToGroup = false;
+		
+		// Try to add to existing group
+		for (const group of groups) {
+			const overlaps = group.some(t => 
+				task.startHour < t.endHour && task.endHour > t.startHour
+			);
+			
+			if (overlaps) {
+				group.push(task);
+				addedToGroup = true;
+				break;
+			}
+		}
+		
+		// Create new group if no overlap found
+		if (!addedToGroup) {
+			groups.push([task]);
+		}
+	}
+	
+	return groups;
+}
+
 // Helper function to get Monday of a given week
 function getMonday(date: Date) {
 	const d = new Date(date);
@@ -218,20 +248,40 @@ function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarCo
 								const columnDate = weekDates[dayIndex];
 								const columnDateString = columnDate.toISOString().split('T')[0];
 								
+								// Get all tasks for this day and hour
+								const hourTasks = tasks.filter(task => {
+									const taskStartHour = Math.floor(task.startHour);
+									return task.date === columnDateString && taskStartHour === hour;
+								});
+								
+								// Check for overlaps within this hour
+								const overlappingGroups = getOverlappingGroups(hourTasks, columnDateString);
+								const maxOverlap = Math.max(...overlappingGroups.map(g => g.length), 1);
+								
 								return (
 									<View key={`${hour}-${day}`} style={styles.dayColumn}>
 										{/* Render tasks for this hour and day */}
-										{tasks
-											.filter(task => {
-												const taskStartHour = Math.floor(task.startHour);
-												// ✅ FIX: Compare actual dates, not just day-of-week!
-												return task.date === columnDateString && taskStartHour === hour;
-											})
-											.map(task => {
+										{hourTasks.map((task, taskIndex) => {
 											const taskStartHour = Math.floor(task.startHour);
 											const startMinutes = (task.startHour - taskStartHour) * 60;
 											const topOffset = startMinutes;
 											const duration = task.endHour - task.startHour;
+											
+											// Find which overlap group this task belongs to
+											let overlapIndex = 0;
+											let groupSize = 1;
+											for (const group of overlappingGroups) {
+												const idx = group.findIndex(t => t.id === task.id);
+												if (idx !== -1) {
+													overlapIndex = idx;
+													groupSize = group.length;
+													break;
+												}
+											}
+											
+											// Calculate width and position for overlapping events
+											const taskWidth = groupSize > 1 ? (COLUMN_WIDTH - 8) / groupSize : COLUMN_WIDTH - 8;
+											const leftOffset = groupSize > 1 ? overlapIndex * taskWidth : 0;
 											
 											return (
 												<TouchableOpacity
@@ -242,6 +292,11 @@ function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarCo
 															backgroundColor: task.color,
 															height: duration * HOUR_HEIGHT - 4,
 															top: topOffset,
+															width: taskWidth,
+															left: leftOffset,
+															borderWidth: groupSize > 1 ? 2 : 0,
+															borderColor: '#fff',
+															opacity: groupSize > 1 ? 0.9 : 1,
 														},
 													]}
 													onLongPress={() => onEditEvent?.(task)}
@@ -254,6 +309,11 @@ function CalendarComponent({ events, onAddButtonPress, onEditEvent }: CalendarCo
 													<Text style={styles.taskTime}>
 														{formatHour(task.startHour)} - {formatHour(task.endHour)}
 													</Text>
+													{groupSize > 1 && (
+														<View style={styles.overlapIndicator}>
+															<Text style={styles.overlapText}>⚠️</Text>
+														</View>
+													)}
 												</TouchableOpacity>
 											);
 										})}
@@ -412,6 +472,20 @@ const styles = StyleSheet.create({
 		fontWeight: 'bold',
 		color: '#25292e',
 		marginTop: -2,
+	},
+	overlapIndicator: {
+		position: 'absolute',
+		top: 4,
+		right: 4,
+		backgroundColor: 'rgba(255, 255, 255, 0.3)',
+		borderRadius: 10,
+		width: 20,
+		height: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	overlapText: {
+		fontSize: 12,
 	},
 });
 

@@ -116,10 +116,14 @@ export function usePersistedEvents() {
 	const clearAllEvents = async () => {
 		try {
 			await AsyncStorage.removeItem(STORAGE_KEY);
-			setEvents(DEFAULT_EVENTS);
+			setEvents([]); // Empty array instead of DEFAULT_EVENTS
 		} catch (error) {
 			console.error('Failed to clear events:', error);
 		}
+	};
+
+	const refetchEvents = async () => {
+		await loadEvents();
 	};
 
 	return {
@@ -129,5 +133,6 @@ export function usePersistedEvents() {
 		updateEvent,
 		deleteEvent,
 		clearAllEvents,
+		refetchEvents,
 	};
 }
