@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 60) / 7; // 60px for time column
-const HOUR_HEIGHT = 60;
+
+// Calculate available height for calendar grid
+// Subtract day headers (~60px), tasks row (~40px), tab bar (~50px), status bar (~40px)
+const AVAILABLE_HEIGHT = height - 190;
 
 interface Task {
 	id: string;
@@ -85,8 +88,29 @@ function getMonday(date: Date) {
 }
 
 function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onEditEvent }: CalendarComponentProps) {
-	const [currentWeekStart, setCurrentWeekStart] = useState(getMonday(new Date()));
-	const [tasks, setTasks] = useState<Task[]>(events || getDefaultEventsForWeek(getMonday(new Date())));
+	const flatListRef = useRef<FlatList>(null);
+	const [tasks, setTasks] = useState<Task[]>(events || []);
+
+	// Generate weeks for infinite scroll (current week in middle)
+	const generateWeeks = useCallback(() => {
+		const weeks = [];
+		const today = new Date();
+		const currentMonday = getMonday(today);
+		
+		// Generate 21 weeks: 10 before, current, 10 after
+		for (let i = -10; i <= 10; i++) {
+			const weekStart = new Date(currentMonday);
+			weekStart.setDate(currentMonday.getDate() + (i * 7));
+			weeks.push({
+				key: `week-${i}`,
+				weekStart: weekStart,
+				index: i
+			});
+		}
+		return weeks;
+	}, []);
+
+	const [weeks] = useState(generateWeeks());
 
 	// Update tasks when events prop changes
 	useEffect(() => {
@@ -101,17 +125,24 @@ function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onE
 		return dayTasks.filter(task => task.date === dateString && !task.completed).length;
 	};
 
-	// Calculate dynamic hour range based on events
-	const getHourRange = () => {
-		if (tasks.length === 0) {
+	// Calculate dynamic hour range based on events for specific week
+	const getHourRangeForWeek = (weekStart: Date) => {
+		const weekEnd = new Date(weekStart);
+		weekEnd.setDate(weekStart.getDate() + 7);
+		
+		const weekTasks = tasks.filter(task => {
+			const taskDate = new Date(task.date);
+			return taskDate >= weekStart && taskDate < weekEnd;
+		});
+
+		if (weekTasks.length === 0) {
 			return { startHour: 8, endHour: 18 };
 		}
 
 		let earliestHour = 24;
 		let latestHour = 0;
 
-		tasks.forEach((task) => {
-			// Safety check: skip tasks with invalid endHour
+		weekTasks.forEach((task) => {
 			if (task.endHour === undefined || isNaN(task.endHour)) {
 				return;
 			}
@@ -123,61 +154,33 @@ function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onE
 			latestHour = Math.max(latestHour, taskEndHour);
 		});
 
-		// Safety check: if no valid tasks found, use default range
 		if (latestHour === 0 || isNaN(latestHour)) {
 			return { startHour: 8, endHour: 18 };
 		}
 
-		// Add 1-hour buffer before and after
 		earliestHour = Math.max(0, earliestHour - 1);
 		latestHour = Math.min(23, latestHour + 1);
 
-		// Ensure minimum 8-hour range for better visibility
-		const hourRange = latestHour - earliestHour;
-		if (hourRange < 8) {
-			// Expand to 8 hours, centering around the current range
-			const expansion = Math.floor((8 - hourRange) / 2);
-			earliestHour = Math.max(0, earliestHour - expansion);
-			latestHour = Math.min(23, latestHour + expansion);
-			
-			// If still less than 8 hours due to bounds, adjust the other end
-			if (latestHour - earliestHour < 8) {
-				if (earliestHour === 0) {
-					latestHour = Math.min(23, earliestHour + 8);
-				} else {
-					earliestHour = Math.max(0, latestHour - 8);
-				}
-			}
-		}
-
 		return { startHour: earliestHour, endHour: latestHour };
 	};
-
-	const { startHour, endHour } = getHourRange();
-	const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => i + startHour);
+	
 	const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-	function formatDate(date: Date) {
+	const formatDate = (date: Date) => {
 		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-	}
+	};
 
-	function getWeekDates() {
+	const getWeekDates = (weekStart: Date) => {
 		const dates = [];
 		for (let i = 0; i < 7; i++) {
-			const date = new Date(currentWeekStart);
-			date.setDate(currentWeekStart.getDate() + i);
+			const date = new Date(weekStart);
+			date.setDate(weekStart.getDate() + i);
 			dates.push(date);
 		}
 		return dates;
-	}
+	};
 
-	function changeWeek(offset: number) {
-		const newDate = new Date(currentWeekStart);
-		newDate.setDate(currentWeekStart.getDate() + (offset * 7));
-		setCurrentWeekStart(getMonday(newDate));
-	}
-
-	function formatHour(hour: number) {
+	const formatHour = (hour: number) => {
 		const wholeHour = Math.floor(hour);
 		const minutes = Math.round((hour - wholeHour) * 60);
 		
@@ -197,82 +200,82 @@ function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onE
 			return `${hourDisplay} ${period}`;
 		}
 		return `${hourDisplay}:${minutes.toString().padStart(2, '0')} ${period}`;
-	}
+	};
 
-	const weekDates = getWeekDates();
 	const isToday = (date: Date) => {
 		const today = new Date();
 		return date.toDateString() === today.toDateString();
 	};
 
-	return (
-		<View style={styles.container}>
-			{/* Header with week navigation */}
-			<View style={styles.header}>
-				<TouchableOpacity onPress={() => changeWeek(-1)} style={styles.navButton}>
-					<Text style={styles.navButtonText}>←</Text>
-				</TouchableOpacity>
-				<Text style={styles.headerTitle}>
-					{formatDate(weekDates[0])} - {formatDate(weekDates[6])}
-				</Text>
-				<TouchableOpacity onPress={() => changeWeek(1)} style={styles.navButton}>
-					<Text style={styles.navButtonText}>→</Text>
-				</TouchableOpacity>
-			</View>
+	// Render a single week view
+	const renderWeek = useCallback(({ item }: { item: { key: string; weekStart: Date; index: number } }) => {
+		const { weekStart } = item;
+		const weekDates = getWeekDates(weekStart);
+		const hourRange = getHourRangeForWeek(weekStart);
+		const hours = Array.from({ length: hourRange.endHour - hourRange.startHour }, (_, i) => hourRange.startHour + i);
+		const HOUR_HEIGHT = AVAILABLE_HEIGHT / hours.length;
 
-			{/* Day headers */}
-			<View style={styles.dayHeaderRow}>
-				<View style={styles.timeColumnHeader} />
-				{days.map((day, index) => {
-					return (
-						<View
-							key={day}
-							style={[
-								styles.dayHeader,
-								isToday(weekDates[index]) && styles.todayHeader
-							]}
-						>
-							<Text style={[
-								styles.dayText,
-								isToday(weekDates[index]) && styles.todayText
-							]}>
-								{day}
-							</Text>
-							<Text style={[
-								styles.dateText,
-								isToday(weekDates[index]) && styles.todayDateText
-							]}>
-								{weekDates[index].getDate()}
-							</Text>
-						</View>
-					);
-				})}
-			</View>
-
-			{/* Tasks row */}
-			<View style={styles.tasksRow}>
-				<View style={styles.tasksLabelColumn}>
-					<Text style={styles.tasksLabel}>Tasks</Text>
+		return (
+			<View style={[styles.container, { width, height }]}>
+				{/* Header with week range */}
+				<View style={styles.header}>
+					<Text style={styles.headerTitle}>
+						{formatDate(weekDates[0])} - {formatDate(weekDates[6])}
+					</Text>
 				</View>
-				{days.map((day, index) => {
-					const taskCount = getTaskCountForDate(weekDates[index]);
-					return (
-						<View key={`task-${day}`} style={styles.taskCountCell}>
-							{taskCount > 0 && (
-								<View style={styles.taskCountBadge}>
-									<Text style={styles.taskCountText}>{taskCount}</Text>
-								</View>
-							)}
-						</View>
-					);
-				})}
-			</View>
 
-			{/* Calendar grid */}
-			<ScrollView style={styles.scrollView}>
+				{/* Day headers */}
+				<View style={styles.dayHeaderRow}>
+					<View style={styles.timeColumnHeader} />
+					{days.map((day, index) => {
+						return (
+							<View
+								key={day}
+								style={[
+									styles.dayHeader,
+									isToday(weekDates[index]) && styles.todayHeader
+								]}
+							>
+								<Text style={[
+									styles.dayText,
+									isToday(weekDates[index]) && styles.todayText
+								]}>
+									{day}
+								</Text>
+								<Text style={[
+									styles.dateText,
+									isToday(weekDates[index]) && styles.todayDateText
+								]}>
+									{weekDates[index].getDate()}
+								</Text>
+							</View>
+						);
+					})}
+				</View>
+
+				{/* Tasks row */}
+				<View style={styles.tasksRow}>
+					<View style={styles.tasksLabelColumn}>
+						<Text style={styles.tasksLabel}>Tasks</Text>
+					</View>
+					{days.map((day, index) => {
+						const taskCount = getTaskCountForDate(weekDates[index]);
+						return (
+							<View key={`task-${day}`} style={styles.taskCountCell}>
+								{taskCount > 0 && (
+									<View style={styles.taskCountBadge}>
+										<Text style={styles.taskCountText}>{taskCount}</Text>
+									</View>
+								)}
+							</View>
+						);
+					})}
+				</View>
+
+				{/* Calendar grid - No scroll, fits to screen */}
 				<View style={styles.gridContainer}>
 					{hours.map((hour) => (
-						<View key={hour} style={styles.hourRow}>
+						<View key={hour} style={[styles.hourRow, { height: HOUR_HEIGHT }]}>
 							{/* Time label */}
 							<View style={styles.timeColumn}>
 								<Text style={styles.timeText}>{formatHour(hour)}</Text>
@@ -294,7 +297,13 @@ function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onE
 								const maxOverlap = Math.max(...overlappingGroups.map(g => g.length), 1);
 								
 								return (
-									<View key={`${hour}-${day}`} style={styles.dayColumn}>
+									<View 
+										key={`${hour}-${day}`} 
+										style={[
+											styles.dayColumn,
+											isToday(columnDate) && styles.todayColumn
+										]}
+									>
 										{/* Render tasks for this hour and day */}
 										{hourTasks.map((task, taskIndex) => {
 											const taskStartHour = Math.floor(task.startHour);
@@ -358,9 +367,30 @@ function CalendarComponent({ events, tasks: dayTasks = [], onAddButtonPress, onE
 						</View>
 					))}
 				</View>
-			</ScrollView>
+			</View>
+		);
+	}, [tasks, events, width, height, AVAILABLE_HEIGHT]);
 
-			{/* Add task button */}
+	return (
+		<View style={styles.container}>
+			<FlatList
+				ref={flatListRef}
+				data={weeks}
+				renderItem={renderWeek}
+				keyExtractor={(item) => item.key}
+				pagingEnabled
+				snapToInterval={height}
+				decelerationRate="fast"
+				showsVerticalScrollIndicator={false}
+				initialScrollIndex={10}
+				getItemLayout={(data, index) => ({
+					length: height,
+					offset: height * index,
+					index,
+				})}
+			/>
+			
+			{/* Fixed Add button - stays in place while scrolling */}
 			<TouchableOpacity style={styles.addButton} onPress={onAddButtonPress}>
 				<Text style={styles.addButtonText}>+</Text>
 			</TouchableOpacity>
@@ -375,7 +405,7 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
+		justifyContent: 'center',
 		alignItems: 'center',
 		paddingHorizontal: 20,
 		paddingVertical: 16,
@@ -387,14 +417,6 @@ const styles = StyleSheet.create({
 		color: '#fff',
 		fontSize: 18,
 		fontWeight: '600',
-	},
-	navButton: {
-		padding: 8,
-	},
-	navButtonText: {
-		color: '#ffd33d',
-		fontSize: 24,
-		fontWeight: 'bold',
 	},
 	dayHeaderRow: {
 		flexDirection: 'row',
@@ -490,7 +512,7 @@ const styles = StyleSheet.create({
 	},
 	hourRow: {
 		flexDirection: 'row',
-		height: HOUR_HEIGHT,
+		// height is set dynamically in render
 		borderBottomWidth: 1,
 		borderBottomColor: '#333',
 	},
@@ -510,6 +532,9 @@ const styles = StyleSheet.create({
 		borderLeftWidth: 1,
 		borderLeftColor: '#333',
 		position: 'relative',
+	},
+	todayColumn: {
+		backgroundColor: '#ffd33d10',
 	},
 	task: {
 		position: 'absolute',
