@@ -1,6 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { 
+  getEvents, 
+  createEvent, 
+  updateEvent, 
+  deleteEvent as deleteEventDB, 
+  CalendarEvent 
+} from '../components/supabase';
 
-interface CalendarEvent {
+interface Task {
   id: string;
   title: string;
   date: string; // ISO date string: "2025-11-18"
@@ -8,8 +14,6 @@ interface CalendarEvent {
   endHour: number;
   color: string;
 }
-
-const STORAGE_KEY = 'planpal_events';
 
 const AVAILABLE_COLORS = [
   '#ff6b6b', // red
@@ -40,25 +44,43 @@ const DEFAULT_DURATIONS: Record<string, number> = {
   break: 0.5,
 };
 
-export async function getCalendarEvents(): Promise<CalendarEvent[]> {
+// Convert CalendarEvent (snake_case) to Task (camelCase)
+function convertToTask(event: CalendarEvent): Task {
+  return {
+    id: event.id,
+    title: event.title,
+    date: event.date,
+    startHour: event.start_hour,
+    endHour: event.end_hour,
+    color: event.color,
+  };
+}
+
+// Convert Task (camelCase) to CalendarEvent format (snake_case)
+function convertToCalendarEvent(task: Omit<Task, 'id'>): Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at' | 'user_id'> {
+  return {
+    title: task.title,
+    date: task.date,
+    start_hour: task.startHour,
+    end_hour: task.endHour,
+    color: task.color,
+  };
+}
+
+export async function getCalendarEvents(): Promise<Task[]> {
   try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    return [];
+    const events = await getEvents();
+    return events.map(convertToTask);
   } catch (error) {
     console.error('Failed to load calendar events:', error);
     return [];
   }
 }
 
-export async function addCalendarEvent(event: CalendarEvent): Promise<boolean> {
+export async function addCalendarEvent(event: Task): Promise<boolean> {
   try {
-    const events = await getCalendarEvents();
-    events.push(event);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-    return true;
+    const dbEvent = await createEvent(convertToCalendarEvent(event));
+    return dbEvent !== null;
   } catch (error) {
     console.error('Failed to add calendar event:', error);
     return false;
@@ -67,40 +89,44 @@ export async function addCalendarEvent(event: CalendarEvent): Promise<boolean> {
 
 export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
   try {
-    const events = await getCalendarEvents();
-    
     // Handle special case: "all" means delete everything
     if (eventId.toLowerCase() === 'all') {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      const events = await getCalendarEvents();
+      for (const event of events) {
+        await deleteEventDB(event.id);
+      }
       return true;
     }
     
     // Handle comma-separated list of IDs
     if (eventId.includes(',')) {
       const ids = eventId.split(',').map(id => id.trim());
-      const filteredEvents = events.filter(e => !ids.includes(e.id));
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filteredEvents));
+      for (const id of ids) {
+        await deleteEventDB(id);
+      }
       return true;
     }
     
     // Handle single ID
-    const filteredEvents = events.filter(e => e.id !== eventId);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filteredEvents));
-    return true;
+    return await deleteEventDB(eventId);
   } catch (error) {
     console.error('Failed to delete calendar event:', error);
     return false;
   }
 }
 
-export async function updateCalendarEvent(eventId: string, updates: Partial<CalendarEvent>): Promise<boolean> {
+export async function updateCalendarEvent(eventId: string, updates: Partial<Task>): Promise<boolean> {
   try {
-    const events = await getCalendarEvents();
-    const updatedEvents = events.map(e => 
-      e.id === eventId ? { ...e, ...updates } : e
-    );
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEvents));
-    return true;
+    // Convert camelCase updates to snake_case
+    const dbUpdates: Partial<Omit<CalendarEvent, 'id' | 'created_at' | 'user_id'>> = {};
+    
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.startHour !== undefined) dbUpdates.start_hour = updates.startHour;
+    if (updates.endHour !== undefined) dbUpdates.end_hour = updates.endHour;
+    if (updates.color !== undefined) dbUpdates.color = updates.color;
+    
+    return await updateEvent(eventId, dbUpdates);
   } catch (error) {
     console.error('Failed to update calendar event:', error);
     return false;
@@ -109,7 +135,7 @@ export async function updateCalendarEvent(eventId: string, updates: Partial<Cale
 
 export interface EventConflict {
   hasConflict: boolean;
-  conflictingEvents: CalendarEvent[];
+  conflictingEvents: Task[];
   message?: string;
 }
 
@@ -117,7 +143,7 @@ export function checkEventConflicts(
   date: string,
   startHour: number,
   endHour: number,
-  existingEvents: CalendarEvent[],
+  existingEvents: Task[],
   excludeEventId?: string
 ): EventConflict {
   const conflicts = existingEvents.filter(event => {
@@ -149,7 +175,7 @@ export function checkEventConflicts(
   };
 }
 
-export function findSimilarEventColor(title: string, existingEvents: CalendarEvent[]): string {
+export function findSimilarEventColor(title: string, existingEvents: Task[]): string {
   const titleLower = title.toLowerCase();
   
   // Find events with similar keywords
@@ -192,7 +218,7 @@ export function getDefaultDuration(title: string): number {
   return 1;
 }
 
-export function formatEventsForAI(events: CalendarEvent[]): string {
+export function formatEventsForAI(events: Task[]): string {
   if (events.length === 0) {
     return 'No calendar events scheduled yet.';
   }
@@ -204,7 +230,7 @@ export function formatEventsForAI(events: CalendarEvent[]): string {
     }
     acc[event.date].push(event);
     return acc;
-  }, {} as Record<string, CalendarEvent[]>);
+  }, {} as Record<string, Task[]>);
 
   // Sort dates
   const sortedDates = Object.keys(eventsByDate).sort();
